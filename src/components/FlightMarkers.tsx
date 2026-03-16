@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { Html, Instances, Instance, Text } from '@react-three/drei';
+import { Html, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { InterpolatedFlight } from '../types/flights';
@@ -19,18 +19,14 @@ export function FlightMarkers({ flights, selectedId, onSelect }: FlightMarkersPr
   const selectedFlight = useMemo(() => flights.find((flight) => flight.id === selectedId), [flights, selectedId]);
   const labelPosition = useMemo(() => {
     if (!selectedFlight) return null;
-    return flightPosition(selectedFlight.latitude, selectedFlight.longitude, selectedFlight.altitude + 1000);
+    return flightPosition(selectedFlight.latitude, selectedFlight.longitude, selectedFlight.altitude + 1800);
   }, [selectedFlight]);
 
   return (
     <group>
-      <Instances limit={flights.length + 8} castShadow receiveShadow>
-        <coneGeometry args={[0.035, 0.18, 6]} />
-        <meshStandardMaterial emissive="#fff2aa" emissiveIntensity={2.3} toneMapped={false} color="#f5f7ff" roughness={0.35} metalness={0.15} />
-        {flights.map((flight) => (
-          <AnimatedFlightInstance key={flight.id} flight={flight} selected={flight.id === selectedId} onSelect={onSelect} />
-        ))}
-      </Instances>
+      {flights.map((flight) => (
+        <AnimatedFlightMarker key={flight.id} flight={flight} selected={flight.id === selectedId} onSelect={onSelect} />
+      ))}
 
       <mesh rotation-x={-Math.PI / 2} position={[0, -GLOBE_RADIUS - 0.001, 0]}>
         <ringGeometry args={[GLOBE_RADIUS * 1.001, GLOBE_RADIUS * 1.0016, 180]} />
@@ -51,7 +47,7 @@ export function FlightMarkers({ flights, selectedId, onSelect }: FlightMarkersPr
   );
 }
 
-function AnimatedFlightInstance({
+function AnimatedFlightMarker({
   flight,
   selected,
   onSelect
@@ -60,10 +56,10 @@ function AnimatedFlightInstance({
   selected: boolean;
   onSelect?: (id?: string) => void;
 }) {
-  const ref = useRef<THREE.Object3D>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
   useFrame(() => {
-    if (!ref.current) return;
+    if (!groupRef.current) return;
 
     const now = Date.now();
     const age = now - flight.receivedAt;
@@ -71,27 +67,43 @@ function AnimatedFlightInstance({
     const source = flight.previous ?? flight;
     const target = flight.target ?? flight;
 
-    tempVec.copy(flightPosition(
-      THREE.MathUtils.lerp(source.latitude, target.latitude, progress),
-      THREE.MathUtils.lerp(source.longitude, target.longitude, progress),
-      THREE.MathUtils.lerp(source.altitude, target.altitude, progress)
-    ));
+    tempVec.copy(
+      flightPosition(
+        THREE.MathUtils.lerp(source.latitude, target.latitude, progress),
+        THREE.MathUtils.lerp(source.longitude, target.longitude, progress),
+        THREE.MathUtils.lerp(source.altitude, target.altitude, progress)
+      )
+    );
 
     tempQuat.copy(tangentQuaternion(tempVec, lerpAngleDegrees(source.trueTrack, target.trueTrack, progress)));
 
-    ref.current.position.copy(tempVec);
-    ref.current.quaternion.copy(tempQuat);
-    ref.current.scale.setScalar(selected ? 1.8 : 1);
+    groupRef.current.position.copy(tempVec);
+    groupRef.current.quaternion.copy(tempQuat);
+    groupRef.current.scale.setScalar(selected ? 1.55 : 1);
   });
 
   return (
-    <Instance
-      ref={ref}
-      color={selected ? '#ffe082' : '#dce8ff'}
+    <group
+      ref={groupRef}
       onClick={(event) => {
         event.stopPropagation();
         onSelect?.(selected ? undefined : flight.id);
       }}
-    />
+    >
+      <mesh castShadow>
+        <coneGeometry args={[0.05, 0.24, 8]} />
+        <meshStandardMaterial
+          color={selected ? '#ffe082' : '#f5f7ff'}
+          emissive={selected ? '#ffdf70' : '#b8d7ff'}
+          emissiveIntensity={selected ? 2.8 : 1.8}
+          roughness={0.3}
+          metalness={0.1}
+        />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[0.04, 10, 10]} />
+        <meshBasicMaterial color={selected ? '#ffe082' : '#9fd0ff'} toneMapped={false} />
+      </mesh>
+    </group>
   );
 }
